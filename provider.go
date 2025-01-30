@@ -77,9 +77,13 @@ func (p *Provider) RunTool(toolName string, args map[string]any) (any, error) {
 	if DEBUG {
 		log.Println("Running tool", toolName, args)
 	}
+	var result any
 	switch p.Provider {
 	case GEMINI:
-		return tools.RunGeminiTool(toolName, args)
+		result, err = tools.RunGeminiTool(toolName, args)
 	}
-	return nil, nil
+	if DEBUG {
+		log.Println("Tool result", result)
+	}
+	return result, err
 }

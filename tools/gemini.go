@@ -9,16 +9,16 @@ import (
 func RunGeminiTool(toolName string, args map[string]any) (any, error) {
 	tool, ok := toolMap[toolName]
 	if !ok {
-		return nil, fmt.Errorf("unknown tool: %s", toolName)
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("unknown tool: %s", toolName),
+		}, fmt.Errorf("unknown tool: %s", toolName)
 	}
 	resp, err := tool.Run(args)
-	if err != nil {
-		return nil, fmt.Errorf("failed to run tool: %v", err)
-	}
 	return genai.FunctionResponse{
 		Name:     toolName,
 		Response: resp,
-	}, nil
+	}, err
 }
 
 func GetGeminiTool(name string) (*genai.Tool, error) {

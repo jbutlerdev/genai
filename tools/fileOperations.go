@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var fileTools = map[string]Tool{
@@ -12,6 +13,7 @@ var fileTools = map[string]Tool{
 	"pwd":       pwdTool,
 	"writeFile": writeFileTool,
 	"readFile":  readFileTool,
+	"listFiles": listFilesTool,
 }
 
 var pwdTool = Tool{
@@ -53,11 +55,28 @@ var readFileTool = Tool{
 func ReadFile(args map[string]any) (map[string]any, error) {
 	path, ok := args["path"].(string)
 	if !ok {
-		return nil, fmt.Errorf("expected string: %v", args["path"])
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("expected string: %v", args["path"]),
+		}, fmt.Errorf("expected string: %v", args["path"])
 	}
-	content, err := os.ReadFile(path)
+	basePath, ok := args["basePath"].(string)
+	if !ok {
+		basePath = "."
+	}
+	p, err := filepath.Abs(filepath.Join(basePath, path))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("failed to read file: %s", err.Error()),
+		}, fmt.Errorf("failed to read file: %w", err)
+	}
+	content, err := os.ReadFile(p)
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("failed to read file: %s", err.Error()),
+		}, fmt.Errorf("failed to read file: %w", err)
 	}
 	return map[string]any{
 		"content": string(content),
@@ -96,11 +115,17 @@ var writeFileTool = Tool{
 func WriteFile(args map[string]any) (map[string]any, error) {
 	path, ok := args["path"].(string)
 	if !ok {
-		return nil, fmt.Errorf("expected string: %v", args["path"])
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("expected string: %v", args["path"]),
+		}, fmt.Errorf("expected string: %v", args["path"])
 	}
 	content, ok := args["content"].(string)
 	if !ok {
-		return nil, fmt.Errorf("expected string: %v", args["content"])
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("expected string: %v", args["content"]),
+		}, fmt.Errorf("expected string: %v", args["content"])
 	}
 	executable, ok := args["executable"].(bool)
 	if !ok {
@@ -120,14 +145,18 @@ func WriteFile(args map[string]any) (map[string]any, error) {
 	}
 	p, err := filepath.Abs(filepath.Join(basePath, path))
 	if err != nil {
-		log.Printf("error resolvong filepath: %s\n", path)
-		return nil, err
+		log.Printf("error resolving filepath: %s\n", path)
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("error resolving filepath: %s", err.Error()),
+		}, fmt.Errorf("error resolving filepath: %w", err)
 	}
 	log.Printf("filepath: %s\n", p)
 	err = os.WriteFile(p, []byte(content), mode)
 	if err != nil {
 		return map[string]any{
 			"success": false,
+			"error":   fmt.Sprintf("failed to write file: %s", err.Error()),
 		}, fmt.Errorf("failed to write file: %w", err)
 	}
 	return map[string]any{
@@ -143,16 +172,57 @@ func RenameFile(oldPath, newPath string) error {
 	return os.Rename(oldPath, newPath)
 }
 
-func ListFiles(path string) ([]string, error) {
-	files, err := os.ReadDir(path)
+var listFilesTool = Tool{
+	Name:        "listFiles",
+	Description: "List the files in a given path",
+	Parameters: []Parameter{
+		{
+			Name:        "path",
+			Type:        "string",
+			Description: "The path to the directory to list",
+			Required:    true,
+		},
+	},
+	Options: map[string]string{
+		"basePath": ".",
+	},
+	Run: ListFiles,
+}
+
+func ListFiles(args map[string]any) (map[string]any, error) {
+	path, ok := args["path"].(string)
+	if !ok {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("expected string: %v", args["path"]),
+		}, fmt.Errorf("expected string: %v", args["path"])
+	}
+	basePath, ok := args["basePath"].(string)
+	if !ok {
+		basePath = "."
+	}
+	p, err := filepath.Abs(filepath.Join(basePath, path))
 	if err != nil {
-		return nil, fmt.Errorf("failed to list files: %w", err)
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("error resolving filepath: %s", err.Error()),
+		}, fmt.Errorf("error resolving filepath: %w", err)
+	}
+	files, err := os.ReadDir(p)
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("failed to list files: %s", err.Error()),
+		}, fmt.Errorf("failed to list files: %w", err)
 	}
 	names := make([]string, len(files))
 	for i, file := range files {
 		names[i] = file.Name()
 	}
-	return names, nil
+	namesString := strings.Join(names, ", ")
+	return map[string]any{
+		"files": namesString,
+	}, nil
 }
 
 func ListDirectories(path string) ([]string, error) {
@@ -194,26 +264,46 @@ var treeTool = Tool{
 
 func Tree(args map[string]any) (map[string]any, error) {
 	var output string
-	root, ok := args["path"].(string)
+	path, ok := args["path"].(string)
 	if !ok {
-		return nil, fmt.Errorf("expected string: %v", args["path"])
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("expected string: %v", args["path"]),
+		}, fmt.Errorf("expected string: %v", args["path"])
 	}
 	excludeList, ok := args["exclude"].([]string)
 	if !ok {
 		excludeList = []string{".git"}
 	}
+	basePath, ok := args["basePath"].(string)
+	if !ok {
+		basePath = "."
+	}
+	root, err := filepath.Abs(filepath.Join(basePath, path))
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("error resolving filepath: %s", err.Error()),
+		}, fmt.Errorf("error resolving filepath: %w", err)
+	}
 
 	// Start with the root directory name
 	rootInfo, err := os.Stat(root)
 	if err != nil {
-		return nil, fmt.Errorf("failed to access root path: %w", err)
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("failed to access root path: %s", err.Error()),
+		}, fmt.Errorf("failed to access root path: %w", err)
 	}
 	output = rootInfo.Name() + "\n"
 
 	// Walk the directory tree
 	subTree, err := subTree(root, "", excludeList)
 	if err != nil {
-		return nil, err
+		return map[string]any{
+			"success": false,
+			"error":   fmt.Sprintf("failed to generate tree: %s", err.Error()),
+		}, fmt.Errorf("failed to generate tree: %w", err)
 	}
 	output += subTree
 
