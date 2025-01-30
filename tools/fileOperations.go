@@ -2,19 +2,23 @@ package tools
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 )
 
 var fileTools = map[string]Tool{
 	"tree":      treeTool,
 	"pwd":       pwdTool,
 	"writeFile": writeFileTool,
+	"readFile":  readFileTool,
 }
 
 var pwdTool = Tool{
 	Name:        "pwd",
 	Description: "Get the current working directory",
 	Parameters:  nil,
+	Options:     map[string]string{},
 	Run:         PWD,
 }
 
@@ -28,12 +32,36 @@ func PWD(_ map[string]any) (map[string]any, error) {
 	}, nil
 }
 
-func ReadFile(path string) (string, error) {
+var readFileTool = Tool{
+	Name:        "readFile",
+	Description: "Read the contents of a file",
+	Parameters: []Parameter{
+		{
+			Name:        "path",
+			Type:        "string",
+			Description: "The path to the file to read",
+			Required:    true,
+		},
+	},
+	Options: map[string]string{
+		"encoding": "utf-8",
+		"basePath": ".",
+	},
+	Run: ReadFile,
+}
+
+func ReadFile(args map[string]any) (map[string]any, error) {
+	path, ok := args["path"].(string)
+	if !ok {
+		return nil, fmt.Errorf("expected string: %v", args["path"])
+	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
-	return string(content), nil
+	return map[string]any{
+		"content": string(content),
+	}, nil
 }
 
 var writeFileTool = Tool{
@@ -59,6 +87,9 @@ var writeFileTool = Tool{
 			Required:    false,
 		},
 	},
+	Options: map[string]string{
+		"basePath": ".",
+	},
 	Run: WriteFile,
 }
 
@@ -83,7 +114,17 @@ func WriteFile(args map[string]any) (map[string]any, error) {
 	if content[len(content)-1] != '\n' {
 		content += "\n"
 	}
-	err := os.WriteFile(path, []byte(content), mode)
+	basePath, ok := args["basePath"].(string)
+	if !ok {
+		basePath = "."
+	}
+	p, err := filepath.Abs(filepath.Join(basePath, path))
+	if err != nil {
+		log.Printf("error resolvong filepath: %s\n", path)
+		return nil, err
+	}
+	log.Printf("filepath: %s\n", p)
+	err = os.WriteFile(p, []byte(content), mode)
 	if err != nil {
 		return map[string]any{
 			"success": false,
@@ -144,6 +185,9 @@ var treeTool = Tool{
 			Description: "The directories to exclude from the list",
 			Required:    false,
 		},
+	},
+	Options: map[string]string{
+		"basePath": ".",
 	},
 	Run: Tree,
 }

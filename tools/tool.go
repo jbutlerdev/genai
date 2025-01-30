@@ -1,12 +1,23 @@
 package tools
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/google/generative-ai-go/genai"
+)
+
+const DEBUG = false
 
 type Tool struct {
 	Name        string
 	Description string
 	Parameters  []Parameter
+	Options     map[string]string
 	Run         func(map[string]any) (map[string]any, error)
+}
+
+type RunnableTool struct {
+	GeminiTool *genai.Tool
 }
 
 type Parameter struct {
@@ -31,4 +42,24 @@ func mergeTools(tools ...map[string]Tool) map[string]Tool {
 		}
 	}
 	return merged
+}
+
+func GetTool(toolName string) (*Tool, error) {
+	tool, ok := toolMap[toolName]
+	if !ok {
+		return nil, fmt.Errorf("tool %s not found", toolName)
+	}
+	return &tool, nil
+}
+
+func GetTools(toolNames []string) ([]*Tool, error) {
+	tools := make([]*Tool, len(toolNames))
+	for i, toolName := range toolNames {
+		tool, err := GetTool(toolName)
+		if err != nil {
+			return nil, err
+		}
+		tools[i] = tool
+	}
+	return tools, nil
 }

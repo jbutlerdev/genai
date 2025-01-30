@@ -67,7 +67,8 @@ var getPullRequestsTool = Tool{
 			Required:    false,
 		},
 	},
-	Run: GetPullRequests,
+	Options: map[string]string{},
+	Run:     GetPullRequests,
 }
 
 func GetPullRequests(args map[string]any) (map[string]any, error) {
@@ -139,7 +140,8 @@ var getAssignedPRsTool = Tool{
 			Required:    false,
 		},
 	},
-	Run: GetAssignedPRs,
+	Options: map[string]string{},
+	Run:     GetAssignedPRs,
 }
 
 func GetAssignedPRs(args map[string]any) (map[string]any, error) {
@@ -205,7 +207,8 @@ var getUserReposTool = Tool{
 			Required:    true,
 		},
 	},
-	Run: GetUserRepos,
+	Options: map[string]string{},
+	Run:     GetUserRepos,
 }
 
 func GetUserRepos(args map[string]any) (map[string]any, error) {
@@ -265,7 +268,8 @@ var getContributedReposTool = Tool{
 			Required:    true,
 		},
 	},
-	Run: GetContributedRepos,
+	Options: map[string]string{},
+	Run:     GetContributedRepos,
 }
 
 func GetContributedRepos(args map[string]any) (map[string]any, error) {
@@ -333,7 +337,8 @@ var getAssignedIssuesTool = Tool{
 			Required:    false,
 		},
 	},
-	Run: GetAssignedIssues,
+	Options: map[string]string{},
+	Run:     GetAssignedIssues,
 }
 
 func GetAssignedIssues(args map[string]any) (map[string]any, error) {
@@ -405,7 +410,8 @@ var getInvolvedIssuesTool = Tool{
 			Required:    false,
 		},
 	},
-	Run: GetInvolvedIssues,
+	Options: map[string]string{},
+	Run:     GetInvolvedIssues,
 }
 
 func GetInvolvedIssues(args map[string]any) (map[string]any, error) {

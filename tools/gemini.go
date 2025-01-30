@@ -6,7 +6,7 @@ import (
 	"github.com/google/generative-ai-go/genai"
 )
 
-func runGeminiTool(toolName string, args map[string]any) (any, error) {
+func RunGeminiTool(toolName string, args map[string]any) (any, error) {
 	tool, ok := toolMap[toolName]
 	if !ok {
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
@@ -21,7 +21,7 @@ func runGeminiTool(toolName string, args map[string]any) (any, error) {
 	}, nil
 }
 
-func getGeminiTool(name string) (*genai.Tool, error) {
+func GetGeminiTool(name string) (*genai.Tool, error) {
 	tool, ok := toolMap[name]
 	if !ok {
 		return nil, fmt.Errorf("tool not found: %s", name)

@@ -1,4 +1,4 @@
-module tools
+module genai
 
 go 1.22.4
 
