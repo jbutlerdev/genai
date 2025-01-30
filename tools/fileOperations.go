@@ -60,17 +60,15 @@ func ReadFile(args map[string]any) (map[string]any, error) {
 			"error":   fmt.Sprintf("expected string: %v", args["path"]),
 		}, fmt.Errorf("expected string: %v", args["path"])
 	}
-	basePath, ok := args["basePath"].(string)
-	if !ok {
-		basePath = "."
-	}
-	p, err := filepath.Abs(filepath.Join(basePath, path))
+
+	p, err := handlePaths(args["basePath"].(string), path)
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"error":   fmt.Sprintf("failed to read file: %s", err.Error()),
-		}, fmt.Errorf("failed to read file: %w", err)
+			"error":   err.Error(),
+		}, err
 	}
+
 	content, err := os.ReadFile(p)
 	if err != nil {
 		return map[string]any{
@@ -139,18 +137,15 @@ func WriteFile(args map[string]any) (map[string]any, error) {
 	if content[len(content)-1] != '\n' {
 		content += "\n"
 	}
-	basePath, ok := args["basePath"].(string)
-	if !ok {
-		basePath = "."
-	}
-	p, err := filepath.Abs(filepath.Join(basePath, path))
+
+	p, err := handlePaths(args["basePath"].(string), path)
 	if err != nil {
-		log.Printf("error resolving filepath: %s\n", path)
 		return map[string]any{
 			"success": false,
-			"error":   fmt.Sprintf("error resolving filepath: %s", err.Error()),
-		}, fmt.Errorf("error resolving filepath: %w", err)
+			"error":   err.Error(),
+		}, err
 	}
+
 	log.Printf("filepath: %s\n", p)
 	err = os.WriteFile(p, []byte(content), mode)
 	if err != nil {
@@ -197,17 +192,15 @@ func ListFiles(args map[string]any) (map[string]any, error) {
 			"error":   fmt.Sprintf("expected string: %v", args["path"]),
 		}, fmt.Errorf("expected string: %v", args["path"])
 	}
-	basePath, ok := args["basePath"].(string)
-	if !ok {
-		basePath = "."
-	}
-	p, err := filepath.Abs(filepath.Join(basePath, path))
+
+	p, err := handlePaths(args["basePath"].(string), path)
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"error":   fmt.Sprintf("error resolving filepath: %s", err.Error()),
-		}, fmt.Errorf("error resolving filepath: %w", err)
+			"error":   err.Error(),
+		}, err
 	}
+
 	files, err := os.ReadDir(p)
 	if err != nil {
 		return map[string]any{
@@ -275,16 +268,12 @@ func Tree(args map[string]any) (map[string]any, error) {
 	if !ok {
 		excludeList = []string{".git"}
 	}
-	basePath, ok := args["basePath"].(string)
-	if !ok {
-		basePath = "."
-	}
-	root, err := filepath.Abs(filepath.Join(basePath, path))
+	root, err := handlePaths(args["basePath"].(string), path)
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"error":   fmt.Sprintf("error resolving filepath: %s", err.Error()),
-		}, fmt.Errorf("error resolving filepath: %w", err)
+			"error":   err.Error(),
+		}, err
 	}
 
 	// Start with the root directory name
@@ -356,4 +345,16 @@ func subTree(path string, prefix string, excludeList []string) (string, error) {
 		}
 	}
 	return output, nil
+}
+
+func handlePaths(basePath string, path string) (string, error) {
+	path = strings.TrimPrefix(path, basePath)
+	if basePath == "" {
+		basePath = "."
+	}
+	p, err := filepath.Abs(filepath.Join(basePath, path))
+	if err != nil {
+		return "", fmt.Errorf("error resolving filepath: %w", err)
+	}
+	return p, nil
 }
