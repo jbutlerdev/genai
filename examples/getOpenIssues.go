@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"genai"
-	"genai/tools"
+	"github.com/jbutlerdev/genai"
+	"github.com/jbutlerdev/genai/tools"
 )
 
 func main() {

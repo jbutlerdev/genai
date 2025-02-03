@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"genai/tools"
+	"github.com/jbutlerdev/genai/tools"
 )
 
 const (
@@ -25,10 +25,11 @@ type Provider struct {
 }
 
 type Chat struct {
-	ctx  context.Context
-	Send chan string
-	Recv chan string
-	Done chan bool
+	ctx                context.Context
+	Send               chan string
+	Recv               chan string
+	GenerationComplete chan bool
+	Done               chan bool
 }
 
 func NewProvider(provider string, apiKey string) (*Provider, error) {
@@ -47,10 +48,11 @@ func (p *Provider) Models() []string {
 
 func (p *Provider) Chat(modelName string, toolsToUse []*tools.Tool) *Chat {
 	chat := &Chat{
-		ctx:  p.Client.ctx,
-		Send: make(chan string),
-		Recv: make(chan string),
-		Done: make(chan bool),
+		ctx:                p.Client.ctx,
+		Send:               make(chan string),
+		Recv:               make(chan string),
+		GenerationComplete: make(chan bool),
+		Done:               make(chan bool),
 	}
 	model := NewModel(p, modelName)
 	for _, tool := range toolsToUse {

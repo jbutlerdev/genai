@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"genai/tools"
+	"github.com/jbutlerdev/genai/tools"
 
 	gemini "github.com/google/generative-ai-go/genai"
 )
@@ -71,11 +71,14 @@ func (m *Model) chat(ctx context.Context, chat *Chat) error {
 			res, err := retryableGeminiCall(input, 0, 1*time.Second)
 			if err != nil {
 				log.Println("Failed to send message", err)
+				continue
 			}
 			err = handleGeminiResponse(m, chat, res)
 			if err != nil {
 				log.Println("Failed to handle response", err)
+				continue
 			}
+			chat.GenerationComplete <- true
 		case <-chat.Done:
 			return nil
 		}
