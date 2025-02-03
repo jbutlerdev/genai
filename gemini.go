@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math"
 	"strings"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 )
 
 const (
-	RETRY_COUNT = 9
+	RETRY_COUNT = 6
 )
 
 type retryableGeminiCallInput struct {
@@ -34,13 +33,11 @@ func retryableGeminiCall(input *retryableGeminiCallInput, attempt int, delay tim
 		resp, err = input.session.SendMessage(input.ctx, input.part)
 	}
 	if err != nil {
-		if strings.Contains(err.Error(), "429") {
-			log.Printf("Rate limit exceeded, waiting for %v and retrying. Current attempt: %d", delay, attempt)
+		if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "400") {
+			log.Printf("Retryable error %s, waiting for %v and retrying. Current attempt: %d", err.Error(), delay, attempt)
 			// rate limit exceeded, wait and retry
 			time.Sleep(delay)
-			// create exponential backoff
-			nextDelay := delay * time.Duration(math.Pow(2, float64(attempt)))
-			return retryableGeminiCall(input, attempt+1, nextDelay)
+			return retryableGeminiCall(input, attempt+1, delay*2)
 		}
 		// non-retryable error
 		return nil, fmt.Errorf("failed to get response: %v", err)
@@ -49,6 +46,9 @@ func retryableGeminiCall(input *retryableGeminiCallInput, attempt int, delay tim
 }
 
 func handleGeminiResponse(m *Model, chat *Chat, resp *gemini.GenerateContentResponse) error {
+	log.Println("prompt_token_count:", resp.UsageMetadata.PromptTokenCount)
+	log.Println("candidates_token_count:", resp.UsageMetadata.CandidatesTokenCount)
+	log.Println("total_token_count:", resp.UsageMetadata.TotalTokenCount)
 	for _, cand := range resp.Candidates {
 		if cand.Content != nil {
 			for _, part := range cand.Content.Parts {
@@ -59,7 +59,7 @@ func handleGeminiResponse(m *Model, chat *Chat, resp *gemini.GenerateContentResp
 					}
 					resp, err := handleGeminiFunctionCall(m, &p)
 					if err != nil {
-						return fmt.Errorf("failed to handle function call: %v", err)
+						log.Printf("failed to handle function call: %v", err)
 					}
 					if resp == nil {
 						return nil
