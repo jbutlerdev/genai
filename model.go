@@ -71,16 +71,15 @@ func (m *Model) chat(ctx context.Context, chat *Chat) error {
 			res, err := retryableGeminiCall(input, 0, 1*time.Second)
 			if err != nil {
 				log.Println("Failed to send message", err)
-				continue
+				break
 			}
 			err = handleGeminiResponse(m, chat, res)
 			if err != nil {
 				log.Println("Failed to handle response", err)
-				continue
 			}
-			chat.GenerationComplete <- true
 		case <-chat.Done:
 			return nil
 		}
+		chat.GenerationComplete <- true
 	}
 }
