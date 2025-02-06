@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -40,5 +41,7 @@ func main() {
 	}()
 
 	chat.Send <- prompt
+
+	<-chat.GenerationComplete
 	chat.Done <- true
 }
