@@ -2,7 +2,6 @@ package tools
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,9 +132,11 @@ func WriteFile(args map[string]any) (map[string]any, error) {
 	if executable {
 		mode = os.FileMode(0755)
 	}
-	// end content with newline if it doesn't already end with one
-	if content[len(content)-1] != '\n' {
-		content += "\n"
+	if len(content) > 0 {
+		// end content with newline if it doesn't already end with one
+		if content[len(content)-1] != '\n' {
+			content += "\n"
+		}
 	}
 
 	p, err := handlePaths(args["basePath"].(string), path)
@@ -146,7 +147,6 @@ func WriteFile(args map[string]any) (map[string]any, error) {
 		}, err
 	}
 
-	log.Printf("filepath: %s\n", p)
 	err = os.WriteFile(p, []byte(content), mode)
 	if err != nil {
 		return map[string]any{

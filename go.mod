@@ -3,8 +3,10 @@ module github.com/jbutlerdev/genai
 go 1.22.4
 
 require (
+	github.com/go-logr/logr v1.4.2
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/go-github/v60 v60.0.0
+	github.com/google/uuid v1.6.0
 	golang.org/x/oauth2 v0.25.0
 	google.golang.org/api v0.219.0
 )
@@ -17,11 +19,9 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/longrunning v0.5.7 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
