@@ -3,9 +3,9 @@ package genai
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/jbutlerdev/genai/tools"
 
 	gemini "github.com/google/generative-ai-go/genai"
@@ -16,10 +16,11 @@ type Model struct {
 	Gemini        *gemini.GenerativeModel
 	geminiSession *gemini.ChatSession
 	Tools         []*tools.Tool
+	Logger        logr.Logger
 }
 
-func NewModel(provider *Provider, model string) *Model {
-	m := &Model{Provider: provider}
+func NewModel(provider *Provider, model string, log logr.Logger) *Model {
+	m := &Model{Provider: provider, Logger: log}
 	switch provider.Provider {
 	case GEMINI:
 		m.Gemini = provider.Client.Gemini.GenerativeModel(model)
@@ -47,21 +48,23 @@ func (m *Model) generate(prompt string) (string, error) {
 		model: m,
 		part:  gemini.Text(prompt),
 	}
+	m.Logger.Info("Generating content", "content", prompt)
 	resp, err := retryableGeminiCall(input, 0, 1*time.Second)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate content: %v", err)
 	}
-	return handleGeminiText(resp), nil
+	response := handleGeminiText(resp)
+	m.Logger.Info("Generated content", "content", response)
+	return response, nil
 }
 
 func (m *Model) chat(ctx context.Context, chat *Chat) error {
+	m.Logger.Info("Starting chat")
 	m.geminiSession = m.Gemini.StartChat()
 	for {
 		select {
 		case msg := <-chat.Send:
-			if DEBUG {
-				log.Println("Sending message", msg)
-			}
+			m.Logger.Info("Sending message", "content", msg)
 			input := &retryableGeminiCallInput{
 				ctx:     ctx,
 				model:   m,
@@ -70,12 +73,12 @@ func (m *Model) chat(ctx context.Context, chat *Chat) error {
 			}
 			res, err := retryableGeminiCall(input, 0, 1*time.Second)
 			if err != nil {
-				log.Println("Failed to send message", err)
+				m.Logger.Error(err, "Failed to send message")
 				break
 			}
 			err = handleGeminiResponse(m, chat, res)
 			if err != nil {
-				log.Println("Failed to handle response", err)
+				m.Logger.Error(err, "Failed to handle response")
 			}
 		case <-chat.Done:
 			return nil
