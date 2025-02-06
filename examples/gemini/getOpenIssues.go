@@ -19,7 +19,9 @@ func main() {
 
 	model := "gemini-2.0-flash-exp"
 
-	geminiProvider, err := genai.NewProvider(genai.GEMINI, apiToken)
+	geminiProvider, err := genai.NewProvider(genai.GEMINI, genai.ProviderOptions{
+		APIKey: apiToken,
+	})
 	if err != nil {
 		panic(err)
 	}
