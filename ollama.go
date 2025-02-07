@@ -2,8 +2,8 @@ package genai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 
@@ -51,8 +51,6 @@ func ollamaChat(model *Model, chat *Chat) error {
 	for {
 		select {
 		case msg := <-chat.Send:
-			log.Printf("Sending message to Ollama: %s", msg)
-			model.Logger.Info("Sending message to Ollama", "content", msg)
 			messages = append(messages, ollama.Message{Role: "user", Content: msg})
 
 			// Convert tools to Ollama format
@@ -61,14 +59,16 @@ func ollamaChat(model *Model, chat *Chat) error {
 			for _, tool := range model.Tools {
 				ollamaTool, err := tools.GetOllamaTool(tool.Name)
 				if err != nil {
-					log.Printf("Failed getting ollama tool: %v", err)
 					model.Logger.Error(err, "Failed to get Ollama tool", "tool", tool.Name)
 					continue
 				}
 				ollamaTools = append(ollamaTools, *ollamaTool)
 			}
 
-			handleOllamaResponse(model, ollamaTools, chat, messages)
+			err := handleOllamaResponse(model, ollamaTools, chat, messages)
+			if err != nil {
+				model.Logger.Error(err, "Failed to handle ollama response")
+			}
 
 		case <-chat.Done:
 			return nil
@@ -78,6 +78,12 @@ func ollamaChat(model *Model, chat *Chat) error {
 }
 
 func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, messages []ollama.Message) error {
+	lastMessage := messages[len(messages)-1]
+	if lastMessage.Role == "tool" {
+		model.Logger.Info("Sending function call output", "content", lastMessage.Content)
+	} else {
+		model.Logger.Info("Sending message to Ollama", "content", lastMessage.Content)
+	}
 	respFunc := func(resp ollama.ChatResponse) error {
 		messages = append(messages, resp.Message)
 		return nil
@@ -90,33 +96,32 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		Stream:   &stream,
 	}, respFunc)
 	if err != nil {
-		log.Printf("Failed to send message to Ollama: %v", err)
 		model.Logger.Error(err, "Failed to send message to Ollama")
 		return err
 	}
-	lastMessage := messages[len(messages)-1]
+	lastMessage = messages[len(messages)-1]
 	// Handle tool calls if any
 	if len(lastMessage.ToolCalls) > 0 {
 		for _, toolCall := range lastMessage.ToolCalls {
-			model.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", fmt.Sprintf("%v", toolCall.Function.Arguments))
+			funcJson, err := json.Marshal(toolCall.Function)
+			if err != nil {
+				model.Logger.Error(err, "Failed to marshal tool call arguments", "tool", toolCall.Function.Name)
+			}
+			model.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", string(funcJson))
 			result, err := model.Provider.RunTool(toolCall.Function.Name, toolCall.Function.Arguments)
 			if err != nil {
-				log.Printf("Failed to run tool: %v", err)
 				model.Logger.Error(err, "Failed to run tool", "tool", toolCall.Function.Name)
-				continue
 			}
 			// Add tool result to chat
 			resultMsg := fmt.Sprintf("Tool %s returned: %v", toolCall.Function.Name, result)
-			log.Printf("Tool result: %s", resultMsg)
-			model.Logger.Info("Sending function call output", "name", toolCall.Function.Name, "content", fmt.Sprintf("%v", toolCall.Function.Arguments))
 			toolResultMessage := ollama.Message{Role: "tool", Content: resultMsg}
 			messages = append(messages, toolResultMessage)
 			// send response
 			return handleOllamaResponse(model, tools, chat, messages)
 		}
+	} else {
+		// send response
+		chat.Recv <- lastMessage.Content
 	}
-	// send response
-	model.Logger.Info("Handling text", "content", fmt.Sprintf("%v", lastMessage.Content))
-	chat.Recv <- lastMessage.Content
 	return nil
 }
