@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os"
 
 	"github.com/jbutlerdev/genai"
@@ -11,33 +11,34 @@ import (
 func main() {
 	prompt := "Provide me a list of all open issues that I have been assigned to.\n" +
 		"My github username is jbutlerdev.\n"
-
-	apiToken := os.Getenv("GEMINI_API_KEY")
-	if apiToken == "" {
-		panic("GEMINI_API_KEY is not set")
+	ollamaBaseUrl := os.Getenv("OLLAMA_BASE_URL")
+	if ollamaBaseUrl == "" {
+		panic("OLLAMA_BASE_URL is not set")
 	}
 
-	model := "gemini-2.0-flash-exp"
+	model := "qwen2.5:7b-instruct-q6_K"
 
-	geminiProvider, err := genai.NewProvider(genai.GEMINI, apiToken)
+	ollamaProvider, err := genai.NewProvider(genai.OLLAMA, genai.ProviderOptions{
+		BaseURL: ollamaBaseUrl,
+	})
 	if err != nil {
 		panic(err)
 	}
-
 	tools, err := tools.GetTools([]string{"getAssignedPRs", "getAssignedIssues", "getContributedRepos", "getUserRepos"})
 	if err != nil {
 		panic(err)
 	}
-
-	chat := geminiProvider.Chat(model, tools)
+	chat := ollamaProvider.Chat(model, tools)
 
 	go func() {
+		log.Printf("Starting to receive messages")
 		for msg := range chat.Recv {
-			fmt.Println(msg)
-			chat.Done <- true
+			log.Printf("Received message: %s", msg)
+			<-chat.GenerationComplete
 		}
+		log.Printf("Done")
 	}()
 
 	chat.Send <- prompt
-	<-chat.Done
+	chat.Done <- true
 }

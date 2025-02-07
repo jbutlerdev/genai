@@ -2,6 +2,7 @@ package genai
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -21,9 +22,16 @@ const (
 type Provider struct {
 	Provider string `json:"provider"`
 	APIKey   string `json:"apiKey"`
+	BaseURL  string `json:"baseURL"`
 	Client   *Client
 	Model    *Model
 	Log      logr.Logger
+}
+
+type ProviderOptions struct {
+	APIKey  string
+	BaseURL string
+	Log     logr.Logger
 }
 
 type Chat struct {
@@ -35,9 +43,14 @@ type Chat struct {
 	Logger             logr.Logger
 }
 
-func NewProvider(provider string, apiKey string) (*Provider, error) {
-	l := logr.Discard()
-	p := &Provider{Provider: provider, APIKey: apiKey, Log: l}
+// NewProvider creates a new provider with a default logr.Discard() logger
+func NewProvider(provider string, options ProviderOptions) (*Provider, error) {
+	p := &Provider{
+		Provider: provider,
+		APIKey:   options.APIKey,
+		BaseURL:  options.BaseURL,
+		Log:      logr.Discard(),
+	}
 	client, err := NewClient(p)
 	if err != nil {
 		return nil, err
@@ -46,8 +59,14 @@ func NewProvider(provider string, apiKey string) (*Provider, error) {
 	return p, nil
 }
 
-func NewProviderWithLog(provider string, apiKey string, log logr.Logger) (*Provider, error) {
-	p := &Provider{Provider: provider, APIKey: apiKey, Log: log}
+// NewProviderWithLog creates a new provider with a custom logr.Logger
+func NewProviderWithLog(provider string, options ProviderOptions) (*Provider, error) {
+	p := &Provider{
+		Provider: provider,
+		APIKey:   options.APIKey,
+		BaseURL:  options.BaseURL,
+		Log:      options.Log,
+	}
 	client, err := NewClient(p)
 	if err != nil {
 		return nil, err
@@ -82,6 +101,9 @@ func (p *Provider) Chat(modelName string, toolsToUse []*tools.Tool) *Chat {
 func (p *Provider) Generate(modelName string, prompt string) (string, error) {
 	l := p.Log.WithName("generate").WithValues("model", modelName, "id", uuid.New().String())
 	model := NewModel(p, modelName, l)
+	if p.Provider == OLLAMA {
+		model.ollamaClient = p.Client.Ollama
+	}
 	return model.generate(prompt)
 }
 
@@ -100,6 +122,12 @@ func (p *Provider) RunTool(toolName string, args map[string]any) (any, error) {
 	switch p.Provider {
 	case GEMINI:
 		result, err = tools.RunGeminiTool(toolName, args)
+	case OLLAMA:
+		if tool.Run != nil {
+			result, err = tool.Run(args)
+		} else {
+			err = fmt.Errorf("tool %s does not have a run function", toolName)
+		}
 	}
 	if DEBUG {
 		p.Log.Info("Tool result", "result", result)

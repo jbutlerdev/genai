@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/google/generative-ai-go/genai"
+	ollama "github.com/ollama/ollama/api"
 )
 
 const DEBUG = false
@@ -18,6 +19,7 @@ type Tool struct {
 
 type RunnableTool struct {
 	GeminiTool *genai.Tool
+	OllamaTool *ollama.Tool
 }
 
 type Parameter struct {

@@ -1,12 +1,13 @@
 module github.com/jbutlerdev/genai
 
-go 1.22.4
+go 1.23.6
 
 require (
 	github.com/go-logr/logr v1.4.2
 	github.com/google/generative-ai-go v0.19.0
 	github.com/google/go-github/v60 v60.0.0
 	github.com/google/uuid v1.6.0
+	github.com/ollama/ollama v0.5.7
 	golang.org/x/oauth2 v0.25.0
 	google.golang.org/api v0.219.0
 )
