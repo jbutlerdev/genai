@@ -85,6 +85,9 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		model.Logger.Info("Sending message to Ollama", "content", lastMessage.Content)
 	}
 	respFunc := func(resp ollama.ChatResponse) error {
+		usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, total_count: %d",
+			resp.PromptEvalCount, resp.EvalCount, (resp.PromptEvalCount + resp.EvalCount))
+		model.Logger.Info("token usage", "content", usageString)
 		messages = append(messages, resp.Message)
 		return nil
 	}
@@ -94,6 +97,9 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		Messages: messages,
 		Tools:    tools,
 		Stream:   &stream,
+		Options: map[string]interface{}{
+			"num_ctx": 32768,
+		},
 	}, respFunc)
 	if err != nil {
 		model.Logger.Error(err, "Failed to send message to Ollama")
@@ -117,10 +123,14 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 			toolResultMessage := ollama.Message{Role: "tool", Content: resultMsg}
 			messages = append(messages, toolResultMessage)
 			// send response
-			return handleOllamaResponse(model, tools, chat, messages)
+			err = handleOllamaResponse(model, tools, chat, messages)
+			if err != nil {
+				model.Logger.Error(err, "Failed to handle tool result")
+			}
 		}
 	} else {
 		// send response
+		model.Logger.Info("Received response from Ollama", "content", lastMessage.Content)
 		chat.Recv <- lastMessage.Content
 	}
 	return nil
