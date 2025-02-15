@@ -65,3 +65,11 @@ func GetTools(toolNames []string) ([]*Tool, error) {
 	}
 	return tools, nil
 }
+
+func Tools() []string {
+	tools := make([]string, 0, len(toolMap))
+	for toolName := range toolMap {
+		tools = append(tools, toolName)
+	}
+	return tools
+}
