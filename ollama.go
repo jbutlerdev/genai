@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/jbutlerdev/genai/tools"
 	ollama "github.com/ollama/ollama/api"
@@ -106,6 +107,11 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		return err
 	}
 	lastMessage = messages[len(messages)-1]
+	lastMessage, err = unmarshalToolCall(lastMessage)
+	if err != nil {
+		model.Logger.Error(err, "Failed to unmarshal tool call")
+		return err
+	}
 	// Handle tool calls if any
 	if len(lastMessage.ToolCalls) > 0 {
 		for _, toolCall := range lastMessage.ToolCalls {
@@ -134,4 +140,28 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		chat.Recv <- lastMessage.Content
 	}
 	return nil
+}
+
+func unmarshalToolCall(message ollama.Message) (ollama.Message, error) {
+	mark := strings.Index(message.Content, "```json")
+	if mark == -1 {
+		// no tool call found, return original message
+		return message, nil
+	}
+	toolString := message.Content[mark+7:]
+	mark = strings.Index(toolString, "```")
+	if mark == -1 {
+		// no closing backticks found, return original message
+		return message, nil
+	}
+	toolString = toolString[:mark]
+	var toolCall ollama.ToolCallFunction
+	err := json.Unmarshal([]byte(toolString), &toolCall)
+	if err != nil {
+		return message, fmt.Errorf("failed to unmarshal tool call: %w", err)
+	}
+	message.ToolCalls = append(message.ToolCalls, ollama.ToolCall{
+		Function: toolCall,
+	})
+	return message, nil
 }
