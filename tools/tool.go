@@ -49,7 +49,7 @@ func mergeTools(tools ...map[string]Tool) map[string]Tool {
 func GetTool(toolName string) (*Tool, error) {
 	tool, ok := toolMap[toolName]
 	if !ok {
-		return nil, fmt.Errorf("tool %s not found", toolName)
+		return nil, fmt.Errorf("tool %s does not exist", toolName)
 	}
 	return &tool, nil
 }
