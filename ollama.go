@@ -109,7 +109,12 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 	lastMessage = messages[len(messages)-1]
 	lastMessage, err = unmarshalToolCall(lastMessage)
 	if err != nil {
-		model.Logger.Error(err, "Failed to unmarshal tool call")
+		// if we hit this case it means the model returned a message that we believe to be a tool call but it can not be unmarshalled.
+		// there is an edge case here where it could be json, and not a tool call, but we will ignore that for now.
+		model.Logger.Error(err, "Failed to unmarshal tool call, sending error back to Ollama")
+		errorMsg := ollama.Message{Role: "user", Content: fmt.Sprintf("error: you provided an invalid tool call: %s", err.Error())}
+		messages = append(messages, errorMsg)
+		err = handleOllamaResponse(model, tools, chat, messages)
 		return err
 	}
 	// Handle tool calls if any

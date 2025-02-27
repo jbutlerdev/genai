@@ -110,7 +110,7 @@ func (p *Provider) Generate(modelName string, prompt string) (string, error) {
 func (p *Provider) RunTool(toolName string, args map[string]any) (any, error) {
 	tool, err := tools.GetTool(toolName)
 	if err != nil {
-		return nil, err
+		return err.Error(), err
 	}
 	for key, value := range tool.Options {
 		args[key] = value
