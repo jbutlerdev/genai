@@ -4,15 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/jbutlerdev/genai/tools"
 	ollama "github.com/ollama/ollama/api"
 )
 
 var stream = false
+
+var toolCallRegex = regexp.MustCompile(`\{"name":\s*"[^"]*",\s*"arguments":`)
 
 func NewOllamaClient(baseURL string) *ollama.Client {
 	if baseURL == "" {
@@ -107,15 +112,18 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		return err
 	}
 	lastMessage = messages[len(messages)-1]
-	lastMessage, err = unmarshalToolCall(lastMessage)
-	if err != nil {
-		// if we hit this case it means the model returned a message that we believe to be a tool call but it can not be unmarshalled.
-		// there is an edge case here where it could be json, and not a tool call, but we will ignore that for now.
-		model.Logger.Error(err, "Failed to unmarshal tool call, sending error back to Ollama")
-		errorMsg := ollama.Message{Role: "user", Content: fmt.Sprintf("error: you provided an invalid tool call: %s", err.Error())}
-		messages = append(messages, errorMsg)
-		err = handleOllamaResponse(model, tools, chat, messages)
-		return err
+	if len(lastMessage.ToolCalls) < 1 {
+		lastMessage, err = unmarshalToolCall(lastMessage, model.Logger)
+		if err != nil {
+			// if we hit this case it means the model returned a message that we believe to be a tool call but it can not be unmarshalled.
+			// there is an edge case here where it could be json, and not a tool call, but we will ignore that for now.
+			model.Logger.Info("Received invalid tool call", "content", lastMessage.Content)
+			model.Logger.Error(err, "Failed to unmarshal tool call, sending error back to Ollama")
+			errorMsg := ollama.Message{Role: "user", Content: fmt.Sprintf("error: you provided an invalid tool call: %s", err.Error())}
+			messages = append(messages, errorMsg)
+			err = handleOllamaResponse(model, tools, chat, messages)
+			return err
+		}
 	}
 	// Handle tool calls if any
 	if len(lastMessage.ToolCalls) > 0 {
@@ -133,11 +141,11 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 			resultMsg := fmt.Sprintf("Tool %s returned: %v", toolCall.Function.Name, result)
 			toolResultMessage := ollama.Message{Role: "tool", Content: resultMsg}
 			messages = append(messages, toolResultMessage)
-			// send response
-			err = handleOllamaResponse(model, tools, chat, messages)
-			if err != nil {
-				model.Logger.Error(err, "Failed to handle tool result")
-			}
+		}
+		// send response
+		err = handleOllamaResponse(model, tools, chat, messages)
+		if err != nil {
+			model.Logger.Error(err, "Failed to handle tool result")
 		}
 	} else {
 		// send response
@@ -147,26 +155,74 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 	return nil
 }
 
-func unmarshalToolCall(message ollama.Message) (ollama.Message, error) {
-	mark := strings.Index(message.Content, "```json")
+func unmarshalToolCall(message ollama.Message, logger logr.Logger) (ollama.Message, error) {
+	toolCallMatch := toolCallRegex.FindString(message.Content)
+	if toolCallMatch == "" {
+		// no tool call found, return original message
+		return message, nil
+	}
+	mark := strings.Index(message.Content, toolCallMatch)
 	if mark == -1 {
 		// no tool call found, return original message
 		return message, nil
 	}
-	toolString := message.Content[mark+7:]
-	mark = strings.Index(toolString, "```")
-	if mark == -1 {
-		// no closing backticks found, return original message
-		return message, nil
-	}
-	toolString = toolString[:mark]
+	toolString := message.Content[mark:]
+	// for now assume there's nothing after the tool call
+	toolString = strings.TrimSuffix(toolString, "```")
+	toolString = strings.TrimSuffix(toolString, "</tool_call>")
 	var toolCall ollama.ToolCallFunction
 	err := json.Unmarshal([]byte(toolString), &toolCall)
 	if err != nil {
-		return message, fmt.Errorf("failed to unmarshal tool call: %w", err)
+		toolString = fixQuotes(toolString)
+		err = json.Unmarshal([]byte(toolString), &toolCall)
+		if err != nil {
+			log.Printf("Failed to unmarshal tool call, attempted string: %s: %s", toolString, err.Error())
+			return message, fmt.Errorf("failed to unmarshal tool call: %w", err)
+		} else {
+			logger.Info("Fixed quotes and unmarshalled tool call", "content", toolString)
+			log.Printf("Fixed quotes and unmarshalled tool call: %s", toolString)
+		}
 	}
 	message.ToolCalls = append(message.ToolCalls, ollama.ToolCall{
 		Function: toolCall,
 	})
+	log.Printf("Added tool call to message: %v", toolString)
 	return message, nil
+}
+
+func fixQuotes(in string) string {
+	var sb strings.Builder
+	approvedSecondRunes := []rune{':', ',', '}'}
+	open := false
+	for i, c := range in {
+		if c == '"' {
+			if !open {
+				open = true
+				sb.WriteRune(c)
+			} else {
+				if runeContains(approvedSecondRunes, rune(in[i+1])) {
+					open = false
+					sb.WriteRune(c)
+				} else {
+					if in[i-1] != '\\' {
+						sb.WriteString(`\"`)
+					} else {
+						sb.WriteRune(c)
+					}
+				}
+			}
+		} else {
+			sb.WriteRune(c)
+		}
+	}
+	return sb.String()
+}
+
+func runeContains(arr []rune, i rune) bool {
+	for _, r := range arr {
+		if r == i {
+			return true
+		}
+	}
+	return false
 }
