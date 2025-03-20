@@ -12,6 +12,11 @@ import (
 	gemini "github.com/google/generative-ai-go/genai"
 )
 
+type ModelOptions struct {
+	ModelName    string
+	SystemPrompt string
+}
+
 type Model struct {
 	Provider      *Provider
 	Gemini        *gemini.GenerativeModel
@@ -20,15 +25,23 @@ type Model struct {
 	ollamaModel   string
 	Tools         []*tools.Tool
 	Logger        logr.Logger
+	SystemPrompt  string
 }
 
-func NewModel(provider *Provider, model string, log logr.Logger) *Model {
-	m := &Model{Provider: provider, Logger: log}
+func NewModel(provider *Provider, modelOptions ModelOptions, log logr.Logger) *Model {
+	m := &Model{
+		Provider:     provider,
+		Logger:       log,
+		SystemPrompt: modelOptions.SystemPrompt,
+	}
 	switch provider.Provider {
 	case GEMINI:
-		m.Gemini = provider.Client.Gemini.GenerativeModel(model)
+		m.Gemini = provider.Client.Gemini.GenerativeModel(modelOptions.ModelName)
+		if modelOptions.SystemPrompt != "" {
+			m.Gemini.SystemInstruction = gemini.NewUserContent(gemini.Text(modelOptions.SystemPrompt))
+		}
 	case OLLAMA:
-		m.ollamaModel = model
+		m.ollamaModel = modelOptions.ModelName
 	}
 	return m
 }
@@ -67,7 +80,7 @@ func (m *Model) generate(prompt string) (string, error) {
 		return response, nil
 	case OLLAMA:
 		m.Logger.Info("Generating content with Ollama", "content", prompt)
-		resp, err := ollamaGenerate(m.Provider.Client.Ollama, m.ollamaModel, prompt)
+		resp, err := ollamaGenerate(m, prompt)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate content with Ollama: %v", err)
 		}

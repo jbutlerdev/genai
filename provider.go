@@ -79,8 +79,8 @@ func (p *Provider) Models() []string {
 	return p.Client.Models()
 }
 
-func (p *Provider) Chat(modelName string, toolsToUse []*tools.Tool) *Chat {
-	l := p.Log.WithName("chat").WithValues("model", modelName, "id", uuid.New().String())
+func (p *Provider) Chat(modelOptions ModelOptions, toolsToUse []*tools.Tool) *Chat {
+	l := p.Log.WithName("chat").WithValues("model", modelOptions.ModelName, "id", uuid.New().String())
 	chat := &Chat{
 		ctx:                p.Client.ctx,
 		Send:               make(chan string),
@@ -89,7 +89,7 @@ func (p *Provider) Chat(modelName string, toolsToUse []*tools.Tool) *Chat {
 		Done:               make(chan bool),
 		Logger:             l,
 	}
-	model := NewModel(p, modelName, l)
+	model := NewModel(p, modelOptions, l)
 	for _, tool := range toolsToUse {
 		model.AddTool(tool)
 	}
@@ -98,9 +98,9 @@ func (p *Provider) Chat(modelName string, toolsToUse []*tools.Tool) *Chat {
 	return chat
 }
 
-func (p *Provider) Generate(modelName string, prompt string) (string, error) {
-	l := p.Log.WithName("generate").WithValues("model", modelName, "id", uuid.New().String())
-	model := NewModel(p, modelName, l)
+func (p *Provider) Generate(modelOptions ModelOptions, prompt string) (string, error) {
+	l := p.Log.WithName("generate").WithValues("model", modelOptions.ModelName, "id", uuid.New().String())
+	model := NewModel(p, modelOptions, l)
 	if p.Provider == OLLAMA {
 		model.ollamaClient = p.Client.Ollama
 	}
