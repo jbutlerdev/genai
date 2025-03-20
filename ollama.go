@@ -108,9 +108,10 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 	respFunc := func(resp ollama.ChatResponse) error {
 		promptEvalDuration := resp.PromptEvalDuration.Seconds()
 		evalDuration := resp.EvalDuration.Seconds()
-		evalSpeed := float64(resp.PromptEvalCount+resp.EvalCount) / (promptEvalDuration + evalDuration)
-		usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, total_count: %d, speed: %.2f tokens/s",
-			resp.PromptEvalCount, resp.EvalCount, (resp.PromptEvalCount + resp.EvalCount), evalSpeed)
+		promptSpeed := float64(resp.PromptEvalCount) / promptEvalDuration
+		evalSpeed := float64(resp.EvalCount) / evalDuration
+		usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, prompt_speed: %.2f tokens/s, eval_speed: %.2f tokens/s",
+			resp.PromptEvalCount, resp.EvalCount, promptSpeed, evalSpeed)
 		model.Logger.Info("token usage", "content", usageString)
 		messages = append(messages, resp.Message)
 		return nil
