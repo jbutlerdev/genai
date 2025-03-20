@@ -29,7 +29,7 @@ type Parameter struct {
 	Required    bool
 }
 
-var toolMap = mergeTools(fileTools, githubTools)
+var toolMap = mergeTools(fileTools, githubTools, gitTools)
 
 func mergeTools(tools ...map[string]Tool) map[string]Tool {
 	keys := make(map[string]bool)

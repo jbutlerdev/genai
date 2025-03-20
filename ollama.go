@@ -2,17 +2,24 @@ package genai
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/jbutlerdev/genai/tools"
 	ollama "github.com/ollama/ollama/api"
+)
+
+const (
+	ollamaTimeout = 1 * time.Hour
 )
 
 var stream = false
@@ -30,12 +37,15 @@ func NewOllamaClient(baseURL string) *ollama.Client {
 	return ollama.NewClient(url, &http.Client{})
 }
 
-func ollamaGenerate(client *ollama.Client, model string, prompt string) (string, error) {
+func ollamaGenerate(m *Model, prompt string) (string, error) {
 	stream := false
 	req := ollama.GenerateRequest{
-		Model:  model,
+		Model:  m.ollamaModel,
 		Prompt: prompt,
 		Stream: &stream,
+	}
+	if m.SystemPrompt != "" {
+		req.System = m.SystemPrompt
 	}
 
 	var respString string
@@ -45,7 +55,9 @@ func ollamaGenerate(client *ollama.Client, model string, prompt string) (string,
 		return nil
 	}
 
-	err := client.Generate(context.Background(), &req, respFunc)
+	generateContext, cancel := context.WithTimeout(context.Background(), ollamaTimeout)
+	defer cancel()
+	err := m.Provider.Client.Ollama.Generate(generateContext, &req, respFunc)
 	if err != nil {
 		return "", err
 	}
@@ -54,6 +66,9 @@ func ollamaGenerate(client *ollama.Client, model string, prompt string) (string,
 
 func ollamaChat(model *Model, chat *Chat) error {
 	messages := []ollama.Message{}
+	if model.SystemPrompt != "" {
+		messages = append(messages, ollama.Message{Role: "system", Content: model.SystemPrompt})
+	}
 	for {
 		select {
 		case msg := <-chat.Send:
@@ -91,14 +106,19 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		model.Logger.Info("Sending message to Ollama", "content", lastMessage.Content)
 	}
 	respFunc := func(resp ollama.ChatResponse) error {
-		usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, total_count: %d",
-			resp.PromptEvalCount, resp.EvalCount, (resp.PromptEvalCount + resp.EvalCount))
+		promptEvalDuration := resp.PromptEvalDuration.Seconds()
+		evalDuration := resp.EvalDuration.Seconds()
+		evalSpeed := float64(resp.PromptEvalCount+resp.EvalCount) / (promptEvalDuration + evalDuration)
+		usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, total_count: %d, speed: %.2f tokens/s",
+			resp.PromptEvalCount, resp.EvalCount, (resp.PromptEvalCount + resp.EvalCount), evalSpeed)
 		model.Logger.Info("token usage", "content", usageString)
 		messages = append(messages, resp.Message)
 		return nil
 	}
 
-	err := model.Provider.Client.Ollama.Chat(model.Provider.Client.ctx, &ollama.ChatRequest{
+	chatContext, cancel := context.WithTimeout(context.Background(), ollamaTimeout)
+	defer cancel()
+	err := model.Provider.Client.Ollama.Chat(chatContext, &ollama.ChatRequest{
 		Model:    model.ollamaModel,
 		Messages: messages,
 		Tools:    tools,
@@ -117,9 +137,9 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		if err != nil {
 			// if we hit this case it means the model returned a message that we believe to be a tool call but it can not be unmarshalled.
 			// there is an edge case here where it could be json, and not a tool call, but we will ignore that for now.
-			model.Logger.Info("Received invalid tool call", "content", lastMessage.Content)
+			model.Logger.Info("Received invalid tool call", "content", html.EscapeString(lastMessage.Content))
 			model.Logger.Error(err, "Failed to unmarshal tool call, sending error back to Ollama")
-			errorMsg := ollama.Message{Role: "user", Content: fmt.Sprintf("error: you provided an invalid tool call: %s", err.Error())}
+			errorMsg := ollama.Message{Role: "tool", Content: fmt.Sprintf("error: you provided an invalid tool call: %s", err.Error())}
 			messages = append(messages, errorMsg)
 			err = handleOllamaResponse(model, tools, chat, messages)
 			return err
@@ -127,11 +147,18 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 	}
 	// Handle tool calls if any
 	if len(lastMessage.ToolCalls) > 0 {
+		toolCalls := map[[32]byte]bool{}
 		for _, toolCall := range lastMessage.ToolCalls {
 			funcJson, err := json.Marshal(toolCall.Function)
 			if err != nil {
 				model.Logger.Error(err, "Failed to marshal tool call arguments", "tool", toolCall.Function.Name)
 			}
+			hash := hashToolCall(funcJson)
+			if toolCalls[hash] {
+				model.Logger.Info("Skipping duplicate tool call", "hash", hash)
+				continue
+			}
+			toolCalls[hash] = true
 			model.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", string(funcJson))
 			result, err := model.Provider.RunTool(toolCall.Function.Name, toolCall.Function.Arguments)
 			if err != nil {
@@ -139,6 +166,7 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 			}
 			// Add tool result to chat
 			resultMsg := fmt.Sprintf("Tool %s returned: %v", toolCall.Function.Name, result)
+			model.Logger.Info("Tool result", "content", resultMsg)
 			toolResultMessage := ollama.Message{Role: "tool", Content: resultMsg}
 			messages = append(messages, toolResultMessage)
 		}
@@ -149,7 +177,7 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		}
 	} else {
 		// send response
-		model.Logger.Info("Received response from Ollama", "content", lastMessage.Content)
+		model.Logger.Info("Received response from Ollama", "content", html.EscapeString(lastMessage.Content))
 		chat.Recv <- lastMessage.Content
 	}
 	return nil
@@ -168,7 +196,8 @@ func unmarshalToolCall(message ollama.Message, logger logr.Logger) (ollama.Messa
 	}
 	toolString := message.Content[mark:]
 	// for now assume there's nothing after the tool call
-	toolString = strings.TrimSuffix(toolString, "```")
+	// remove ``` and </tool_call>
+	toolString = strings.ReplaceAll(toolString, "```", "")
 	toolString = strings.TrimSuffix(toolString, "</tool_call>")
 	var toolCall ollama.ToolCallFunction
 	err := json.Unmarshal([]byte(toolString), &toolCall)
@@ -225,4 +254,8 @@ func runeContains(arr []rune, i rune) bool {
 		}
 	}
 	return false
+}
+
+func hashToolCall(toolCall []byte) [32]byte {
+	return sha256.Sum256(toolCall)
 }
