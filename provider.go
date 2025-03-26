@@ -101,8 +101,11 @@ func (p *Provider) Chat(modelOptions ModelOptions, toolsToUse []*tools.Tool) *Ch
 func (p *Provider) Generate(modelOptions ModelOptions, prompt string) (string, error) {
 	l := p.Log.WithName("generate").WithValues("model", modelOptions.ModelName, "id", uuid.New().String())
 	model := NewModel(p, modelOptions, l)
-	if p.Provider == OLLAMA {
+	switch p.Provider {
+	case OLLAMA:
 		model.ollamaClient = p.Client.Ollama
+	case OPENAI:
+		model.openAIClient = p.Client.OpenAI
 	}
 	return model.generate(prompt)
 }
@@ -123,6 +126,12 @@ func (p *Provider) RunTool(toolName string, args map[string]any) (any, error) {
 	case GEMINI:
 		result, err = tools.RunGeminiTool(toolName, args)
 	case OLLAMA:
+		if tool.Run != nil {
+			result, err = tool.Run(args)
+		} else {
+			err = fmt.Errorf("tool %s does not have a run function", toolName)
+		}
+	case OPENAI:
 		if tool.Run != nil {
 			result, err = tool.Run(args)
 		} else {
