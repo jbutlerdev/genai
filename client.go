@@ -15,6 +15,7 @@ type Client struct {
 	provider string
 	Gemini   *gemini.Client
 	Ollama   *ollama.Client
+	OpenAI   *OpenAIClient
 }
 
 func NewClient(provider *Provider) (*Client, error) {
@@ -32,6 +33,12 @@ func NewClient(provider *Provider) (*Client, error) {
 		client.Gemini = g
 	case OLLAMA:
 		client.Ollama = NewOllamaClient(provider.BaseURL)
+	case OPENAI:
+		o, err := NewOpenAIClient(provider)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OpenAI client: %v", err)
+		}
+		client.OpenAI = o
 	}
 	return client, nil
 }
@@ -42,6 +49,8 @@ func (c *Client) Models() []string {
 		return c.getGeminiModels()
 	case OLLAMA:
 		return c.getOllamaModels()
+	case OPENAI:
+		return c.OpenAI.Models()
 	}
 	return []string{}
 }

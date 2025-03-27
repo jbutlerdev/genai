@@ -73,7 +73,7 @@ func handleGeminiResponse(m *Model, chat *Chat, resp *gemini.GenerateContentResp
 					if err != nil {
 						return fmt.Errorf("failed to send message: %v", err)
 					}
-					return handleGeminiResponse(m, chat, mresp)
+					handleGeminiResponse(m, chat, mresp)
 				case gemini.Text:
 					m.Logger.Info("Handling text", "content", fmt.Sprintf("%v", part))
 					chat.Recv <- fmt.Sprintf("%v", part)

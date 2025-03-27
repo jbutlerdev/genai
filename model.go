@@ -10,6 +10,7 @@ import (
 	ollama "github.com/ollama/ollama/api"
 
 	gemini "github.com/google/generative-ai-go/genai"
+	"github.com/openai/openai-go"
 )
 
 type ModelOptions struct {
@@ -23,6 +24,8 @@ type Model struct {
 	geminiSession *gemini.ChatSession
 	ollamaClient  *ollama.Client
 	ollamaModel   string
+	openAIModel   string
+	openAIClient  *OpenAIClient
 	Tools         []*tools.Tool
 	Logger        logr.Logger
 	SystemPrompt  string
@@ -42,6 +45,9 @@ func NewModel(provider *Provider, modelOptions ModelOptions, log logr.Logger) *M
 		}
 	case OLLAMA:
 		m.ollamaModel = modelOptions.ModelName
+	case OPENAI:
+		m.openAIModel = modelOptions.ModelName
+		m.openAIClient = provider.Client.OpenAI
 	}
 	return m
 }
@@ -56,6 +62,8 @@ func (m *Model) AddTool(toolsToAdd ...*tools.Tool) error {
 			}
 			m.Gemini.Tools = append(m.Gemini.Tools, geminiTool)
 		case OLLAMA:
+			m.Tools = append(m.Tools, tool)
+		case OPENAI:
 			m.Tools = append(m.Tools, tool)
 		}
 	}
@@ -83,6 +91,14 @@ func (m *Model) generate(prompt string) (string, error) {
 		resp, err := ollamaGenerate(m, prompt)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate content with Ollama: %v", err)
+		}
+		m.Logger.Info("Generated content", "content", resp)
+		return resp, nil
+	case OPENAI:
+		m.Logger.Info("Generating content with OpenAI", "content", prompt)
+		resp, err := m.openAIClient.Generate(context.Background(), m.openAIModel, prompt)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate content with OpenAI: %v", err)
 		}
 		m.Logger.Info("Generated content", "content", resp)
 		return resp, nil
@@ -122,6 +138,15 @@ func (m *Model) chat(ctx context.Context, chat *Chat) error {
 		}
 	case OLLAMA:
 		return ollamaChat(m, chat)
+	case OPENAI:
+		// Initialize messages array
+		messages := []openai.ChatCompletionMessage{}
+
+		// Pass tools to OpenAI client
+		m.openAIClient.Tools = m.Tools
+
+		// Delegate to OpenAI client's Chat method
+		return m.openAIClient.Chat(ctx, m.openAIModel, m.SystemPrompt, chat, m.Provider, messages)
 	default:
 		return fmt.Errorf("unsupported provider: %s", m.Provider.Provider)
 	}

@@ -43,6 +43,9 @@ func ollamaGenerate(m *Model, prompt string) (string, error) {
 		Model:  m.ollamaModel,
 		Prompt: prompt,
 		Stream: &stream,
+		Options: map[string]interface{}{
+			"num_ctx": 32768,
+		},
 	}
 	if m.SystemPrompt != "" {
 		req.System = m.SystemPrompt
@@ -51,6 +54,7 @@ func ollamaGenerate(m *Model, prompt string) (string, error) {
 	var respString string
 
 	respFunc := func(resp ollama.GenerateResponse) error {
+		printUsage(resp.Metrics, m.Logger)
 		respString = resp.Response
 		return nil
 	}
@@ -98,6 +102,16 @@ func ollamaChat(model *Model, chat *Chat) error {
 	}
 }
 
+func printUsage(resp ollama.Metrics, logger logr.Logger) {
+	promptEvalDuration := resp.PromptEvalDuration.Seconds()
+	evalDuration := resp.EvalDuration.Seconds()
+	promptSpeed := float64(resp.PromptEvalCount) / promptEvalDuration
+	evalSpeed := float64(resp.EvalCount) / evalDuration
+	usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, prompt_speed: %.2f tokens/s, eval_speed: %.2f tokens/s",
+		resp.PromptEvalCount, resp.EvalCount, promptSpeed, evalSpeed)
+	logger.Info("token usage", "content", usageString)
+}
+
 func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, messages []ollama.Message) error {
 	lastMessage := messages[len(messages)-1]
 	if lastMessage.Role == "tool" {
@@ -106,13 +120,7 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		model.Logger.Info("Sending message to Ollama", "content", lastMessage.Content)
 	}
 	respFunc := func(resp ollama.ChatResponse) error {
-		promptEvalDuration := resp.PromptEvalDuration.Seconds()
-		evalDuration := resp.EvalDuration.Seconds()
-		promptSpeed := float64(resp.PromptEvalCount) / promptEvalDuration
-		evalSpeed := float64(resp.EvalCount) / evalDuration
-		usageString := fmt.Sprintf("prompt_count: %d, eval_count: %d, prompt_speed: %.2f tokens/s, eval_speed: %.2f tokens/s",
-			resp.PromptEvalCount, resp.EvalCount, promptSpeed, evalSpeed)
-		model.Logger.Info("token usage", "content", usageString)
+		printUsage(resp.Metrics, model.Logger)
 		messages = append(messages, resp.Message)
 		return nil
 	}
