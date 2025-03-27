@@ -139,15 +139,14 @@ func (m *Model) chat(ctx context.Context, chat *Chat) error {
 	case OLLAMA:
 		return ollamaChat(m, chat)
 	case OPENAI:
+		// Initialize messages array
 		messages := []openai.ChatCompletionMessage{}
-		if m.SystemPrompt != "" {
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    "system",
-				Content: m.SystemPrompt,
-			})
-		}
-		m.openAIClient.StreamChat(ctx, m.openAIModel, messages, chat.Send, chat.Recv, chat.Done)
-		return nil
+
+		// Pass tools to OpenAI client
+		m.openAIClient.Tools = m.Tools
+
+		// Delegate to OpenAI client's Chat method
+		return m.openAIClient.Chat(ctx, m.openAIModel, m.SystemPrompt, chat, m.Provider, messages)
 	default:
 		return fmt.Errorf("unsupported provider: %s", m.Provider.Provider)
 	}
