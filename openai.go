@@ -250,7 +250,7 @@ func (c *OpenAIClient) processOpenAIMessage(ctx context.Context, model string, c
 		var toolResponses []openai.ChatCompletionMessage
 
 		// Process each tool call
-		for i, toolCall := range choice.Message.ToolCalls {
+		for _, toolCall := range choice.Message.ToolCalls {
 			if toolCall.Type == "function" {
 				chat.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", toolCall.Function.Arguments)
 
