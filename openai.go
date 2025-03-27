@@ -89,9 +89,20 @@ func (c *OpenAIClient) ConvertToolToFunction(tool *tools.Tool) openai.FunctionDe
 	properties := make(map[string]interface{})
 
 	for _, param := range tool.Parameters {
-		properties[param.Name] = map[string]string{
-			"type":        param.Type,
-			"description": param.Description,
+		switch param.Type {
+		case "stringArray":
+			properties[param.Name] = map[string]interface{}{
+				"type":        "array",
+				"description": param.Description,
+				"items": map[string]interface{}{
+					"type": "string",
+				},
+			}
+		default:
+			properties[param.Name] = map[string]string{
+				"type":        param.Type,
+				"description": param.Description,
+			}
 		}
 		if param.Required {
 			required = append(required, param.Name)
@@ -213,13 +224,6 @@ func (c *OpenAIClient) processOpenAIMessage(ctx context.Context, model string, c
 		params.Tools = tools
 	}
 
-	jsonParams, err := json.MarshalIndent(params, "", "  ")
-	if err != nil {
-		chat.Logger.Error(err, "Failed to marshal params for logging")
-	} else {
-		chat.Logger.Info("Params", "content", string(jsonParams))
-	}
-
 	// Get response
 	resp, err := c.client.Chat.Completions.New(ctx, params)
 	if err != nil {
@@ -231,14 +235,6 @@ func (c *OpenAIClient) processOpenAIMessage(ctx context.Context, model string, c
 	}
 
 	choice := resp.Choices[0]
-	/*
-		jsonMessage, err := json.MarshalIndent(choice.Message, "", "  ")
-		if err != nil {
-			chat.Logger.Error(err, "Failed to marshal message for logging")
-		} else {
-			chat.Logger.Info("Raw response", "content", string(jsonMessage))
-		}
-	*/
 
 	// Handle tool calls if present
 	if len(choice.Message.ToolCalls) > 0 {
