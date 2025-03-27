@@ -252,7 +252,7 @@ func (c *OpenAIClient) processOpenAIMessage(ctx context.Context, model string, c
 		// Process each tool call
 		for i, toolCall := range choice.Message.ToolCalls {
 			if toolCall.Type == "function" {
-				chat.Logger.Info("Handling function call", "index", i, "id", toolCall.ID, "name", toolCall.Function.Name)
+				chat.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", toolCall.Function.Arguments)
 
 				// Parse arguments to map
 				var argsMap map[string]interface{}
