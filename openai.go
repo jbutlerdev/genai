@@ -9,6 +9,7 @@ import (
 	"github.com/jbutlerdev/genai/tools"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
 )
 
@@ -61,6 +62,48 @@ func (c *OpenAIClient) Models() []string {
 	}
 
 	return allModels
+}
+
+func newParams(model string, messages []openai.ChatCompletionMessageParamUnion, params map[string]any) openai.ChatCompletionNewParams {
+	messageParams := openai.ChatCompletionNewParams{
+		Model:    model,
+		Messages: messages,
+	}
+	for k, v := range params {
+		switch k {
+		case RepeatPenalty:
+			penalty, ok := v.(float64)
+			if !ok {
+				penalty = 1.0
+			}
+			messageParams.FrequencyPenalty = param.Opt[float64]{Value: penalty}
+		case Temperature:
+			temperature, ok := v.(float64)
+			if !ok {
+				temperature = 1.0
+			}
+			messageParams.Temperature = param.Opt[float64]{Value: temperature}
+		case Seed:
+			seed, ok := v.(int64)
+			if !ok {
+				seed = 0
+			}
+			messageParams.Seed = param.Opt[int64]{Value: seed}
+		case NumPredict:
+			numPredict, ok := v.(int)
+			if !ok {
+				numPredict = 1
+			}
+			messageParams.MaxCompletionTokens = param.Opt[int64]{Value: int64(numPredict)}
+		case TopP:
+			topP, ok := v.(float64)
+			if !ok {
+				topP = 1.0
+			}
+			messageParams.TopP = param.Opt[float64]{Value: topP}
+		}
+	}
+	return messageParams
 }
 
 func (c *OpenAIClient) Generate(ctx context.Context, modelName string, prompt string) (string, error) {

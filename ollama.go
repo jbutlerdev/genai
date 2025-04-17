@@ -40,12 +40,10 @@ func NewOllamaClient(baseURL string) *ollama.Client {
 func ollamaGenerate(m *Model, prompt string) (string, error) {
 	stream := false
 	req := ollama.GenerateRequest{
-		Model:  m.ollamaModel,
-		Prompt: prompt,
-		Stream: &stream,
-		Options: map[string]interface{}{
-			"num_ctx": 32768,
-		},
+		Model:   m.ollamaModel,
+		Prompt:  prompt,
+		Stream:  &stream,
+		Options: m.Parameters,
 	}
 	if m.SystemPrompt != "" {
 		req.System = m.SystemPrompt
@@ -132,9 +130,7 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 		Messages: messages,
 		Tools:    tools,
 		Stream:   &stream,
-		Options: map[string]interface{}{
-			"num_ctx": 32768,
-		},
+		Options:  model.Parameters,
 	}, respFunc)
 	if err != nil {
 		model.Logger.Error(err, "Failed to send message to Ollama")
