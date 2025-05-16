@@ -121,7 +121,7 @@ func (m *Model) generate(prompt string) (string, error) {
 		return resp, nil
 	case OPENAI:
 		m.Logger.Info("Generating content with OpenAI", "content", prompt)
-		resp, err := m.openAIClient.Generate(context.Background(), m.openAIModel, prompt)
+		resp, err := m.openAIClient.Generate(context.Background(), m.openAIModel, m.SystemPrompt, prompt)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate content with OpenAI: %v", err)
 		}
