@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/jbutlerdev/genai/tools"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
+)
+
+const (
+	openaiTimeout = 1 * time.Hour
 )
 
 type OpenAIClient struct {
@@ -63,15 +69,62 @@ func (c *OpenAIClient) Models() []string {
 	return allModels
 }
 
-func (c *OpenAIClient) Generate(ctx context.Context, modelName string, prompt string) (string, error) {
+func newParams(model string, messages []openai.ChatCompletionMessageParamUnion, params map[string]any) openai.ChatCompletionNewParams {
+	messageParams := openai.ChatCompletionNewParams{
+		Model:    model,
+		Messages: messages,
+	}
+	for k, v := range params {
+		switch k {
+		case RepeatPenalty:
+			penalty, ok := v.(float64)
+			if !ok {
+				penalty = 1.0
+			}
+			messageParams.FrequencyPenalty = param.Opt[float64]{Value: penalty}
+		case Temperature:
+			temperature, ok := v.(float64)
+			if !ok {
+				temperature = 1.0
+			}
+			messageParams.Temperature = param.Opt[float64]{Value: temperature}
+		case Seed:
+			seed, ok := v.(int64)
+			if !ok {
+				seed = 0
+			}
+			messageParams.Seed = param.Opt[int64]{Value: seed}
+		case NumPredict:
+			numPredict, ok := v.(int)
+			if !ok {
+				numPredict = 1
+			}
+			messageParams.MaxCompletionTokens = param.Opt[int64]{Value: int64(numPredict)}
+		case TopP:
+			topP, ok := v.(float64)
+			if !ok {
+				topP = 1.0
+			}
+			messageParams.TopP = param.Opt[float64]{Value: topP}
+		}
+	}
+	return messageParams
+}
+
+func (c *OpenAIClient) Generate(ctx context.Context, modelName string, systemPrompt string, prompt string) (string, error) {
+	messages := []openai.ChatCompletionMessageParamUnion{}
+	if systemPrompt != "" {
+		messages = append(messages, openai.SystemMessage(systemPrompt))
+	}
+	messages = append(messages, openai.UserMessage(prompt))
 	params := openai.ChatCompletionNewParams{
-		Model: modelName,
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(prompt),
-		},
+		Model:    modelName,
+		Messages: messages,
 	}
 
-	resp, err := c.client.Chat.Completions.New(ctx, params)
+	generateContext, cancel := context.WithTimeout(ctx, openaiTimeout)
+	defer cancel()
+	resp, err := c.client.Chat.Completions.New(generateContext, params)
 	if err != nil {
 		return "", fmt.Errorf("failed to create chat completion: %w", err)
 	}
@@ -225,7 +278,9 @@ func (c *OpenAIClient) processOpenAIMessage(ctx context.Context, model string, c
 	}
 
 	// Get response
-	resp, err := c.client.Chat.Completions.New(ctx, params)
+	processContext, cancel := context.WithTimeout(ctx, openaiTimeout)
+	defer cancel()
+	resp, err := c.client.Chat.Completions.New(processContext, params)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -252,11 +307,15 @@ func (c *OpenAIClient) processOpenAIMessage(ctx context.Context, model string, c
 		// Process each tool call
 		for _, toolCall := range choice.Message.ToolCalls {
 			if toolCall.Type == "function" {
-				chat.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", toolCall.Function.Arguments)
+				funcJson, err := json.MarshalIndent(toolCall.Function, "", "  ")
+				if err != nil {
+					chat.Logger.Error(err, "Failed to marshal tool call arguments", "tool", toolCall.Function.Name)
+				}
+				chat.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", string(funcJson))
 
 				// Parse arguments to map
 				var argsMap map[string]interface{}
-				err := json.Unmarshal([]byte(toolCall.Function.Arguments), &argsMap)
+				err = json.Unmarshal([]byte(toolCall.Function.Arguments), &argsMap)
 				if err != nil {
 					chat.Logger.Error(err, "Failed to parse tool arguments")
 					continue

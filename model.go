@@ -13,9 +13,26 @@ import (
 	"github.com/openai/openai-go"
 )
 
+const (
+	Mirostat      = "mirostat"
+	MirostatETA   = "mirostat_eta"
+	MirostatTau   = "mirostat_tau"
+	NumCtx        = "num_ctx"
+	RepeatLastN   = "repeat_last_n"
+	RepeatPenalty = "repeat_penalty"
+	Temperature   = "temperature"
+	Seed          = "seed"
+	Stop          = "stop"
+	NumPredict    = "num_predict"
+	TopK          = "top_k"
+	TopP          = "top_p"
+	MinP          = "min_p"
+)
+
 type ModelOptions struct {
 	ModelName    string
 	SystemPrompt string
+	Parameters   map[string]any
 }
 
 type Model struct {
@@ -29,13 +46,21 @@ type Model struct {
 	Tools         []*tools.Tool
 	Logger        logr.Logger
 	SystemPrompt  string
+	Parameters    map[string]any
 }
 
 func NewModel(provider *Provider, modelOptions ModelOptions, log logr.Logger) *Model {
+	if modelOptions.Parameters == nil {
+		modelOptions.Parameters = make(map[string]any)
+	}
+	if _, ok := modelOptions.Parameters[NumCtx]; !ok {
+		modelOptions.Parameters[NumCtx] = 32768
+	}
 	m := &Model{
 		Provider:     provider,
 		Logger:       log,
 		SystemPrompt: modelOptions.SystemPrompt,
+		Parameters:   modelOptions.Parameters,
 	}
 	switch provider.Provider {
 	case GEMINI:
@@ -96,7 +121,7 @@ func (m *Model) generate(prompt string) (string, error) {
 		return resp, nil
 	case OPENAI:
 		m.Logger.Info("Generating content with OpenAI", "content", prompt)
-		resp, err := m.openAIClient.Generate(context.Background(), m.openAIModel, prompt)
+		resp, err := m.openAIClient.Generate(context.Background(), m.openAIModel, m.SystemPrompt, prompt)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate content with OpenAI: %v", err)
 		}
