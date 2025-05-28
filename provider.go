@@ -21,6 +21,7 @@ const (
 
 type Provider struct {
 	Provider string `json:"provider"`
+	Name     string `json:"name"`
 	APIKey   string `json:"apiKey"`
 	BaseURL  string `json:"baseURL"`
 	Client   *Client
@@ -29,6 +30,7 @@ type Provider struct {
 }
 
 type ProviderOptions struct {
+	Name    string
 	APIKey  string
 	BaseURL string
 	Log     logr.Logger
@@ -47,6 +49,7 @@ type Chat struct {
 func NewProvider(provider string, options ProviderOptions) (*Provider, error) {
 	p := &Provider{
 		Provider: provider,
+		Name:     options.Name,
 		APIKey:   options.APIKey,
 		BaseURL:  options.BaseURL,
 		Log:      logr.Discard(),
@@ -63,6 +66,7 @@ func NewProvider(provider string, options ProviderOptions) (*Provider, error) {
 func NewProviderWithLog(provider string, options ProviderOptions) (*Provider, error) {
 	p := &Provider{
 		Provider: provider,
+		Name:     options.Name,
 		APIKey:   options.APIKey,
 		BaseURL:  options.BaseURL,
 		Log:      options.Log,

@@ -12,12 +12,12 @@ import (
 )
 
 var searchTools = map[string]Tool{
-	"searxng": searxngTool,
-	"getURL":  getURLTool,
+	"SearchWeb":    searchWebTool,
+	"RetrievePage": retrievePageTool,
 }
 
-var searxngTool = Tool{
-	Name:        "searxng",
+var searchWebTool = Tool{
+	Name:        "SearchWeb",
 	Description: "Search the web for information",
 	Parameters: []Parameter{
 		{
@@ -27,10 +27,10 @@ var searxngTool = Tool{
 		},
 	},
 	Options: map[string]string{},
-	Run:     Searxng,
+	Run:     SearchWeb,
 }
 
-func Searxng(args map[string]any) (map[string]any, error) {
+func SearchWeb(args map[string]any) (map[string]any, error) {
 	query, ok := args["query"].(string)
 	if !ok {
 		return map[string]any{
@@ -83,15 +83,21 @@ func Searxng(args map[string]any) (map[string]any, error) {
 	}, nil
 }
 
-var getURLTool = Tool{
-	Name:        "getURL",
-	Description: "Get the content of a URL",
-	Parameters:  []Parameter{},
-	Options:     map[string]string{},
-	Run:         GetURL,
+var retrievePageTool = Tool{
+	Name:        "RetrievePage",
+	Description: "Retrieve the web page contents from a URL",
+	Parameters: []Parameter{
+		{
+			Name:        "url",
+			Type:        "string",
+			Description: "The URL to retrieve the web page contents from",
+		},
+	},
+	Options: map[string]string{},
+	Run:     RetrievePage,
 }
 
-func GetURL(args map[string]any) (map[string]any, error) {
+func RetrievePage(args map[string]any) (map[string]any, error) {
 	url, ok := args["url"].(string)
 	if !ok {
 		return map[string]any{
