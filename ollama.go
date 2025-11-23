@@ -264,3 +264,49 @@ func runeContains(arr []rune, i rune) bool {
 func hashToolCall(toolCall []byte) [32]byte {
 	return sha256.Sum256(toolCall)
 }
+
+// GenerateEmbedding generates an embedding for a single text input using Ollama's embedding API
+func ollamaGenerateEmbedding(ctx context.Context, client *ollama.Client, text string, model string) ([]float32, error) {
+	// Use all-minilm as the default embedding model if not specified
+	if model == "" {
+		model = "all-minilm"
+	}
+
+	req := &ollama.EmbeddingRequest{
+		Model:  model,
+		Prompt: text,
+	}
+
+	resp, err := client.Embeddings(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+
+	// Convert []float64 to []float32
+	embedding := make([]float32, len(resp.Embedding))
+	for i, v := range resp.Embedding {
+		embedding[i] = float32(v)
+	}
+
+	return embedding, nil
+}
+
+// GenerateEmbeddings generates embeddings for multiple text inputs using Ollama's embedding API
+func ollamaGenerateEmbeddings(ctx context.Context, client *ollama.Client, texts []string, model string) ([][]float32, error) {
+	// Use all-minilm as the default embedding model if not specified
+	if model == "" {
+		model = "all-minilm"
+	}
+
+	req := &ollama.EmbedRequest{
+		Model: model,
+		Input: texts,
+	}
+
+	resp, err := client.Embed(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate embeddings: %w", err)
+	}
+
+	return resp.Embeddings, nil
+}

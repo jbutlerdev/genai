@@ -93,12 +93,13 @@ var retrievePageTool = Tool{
 			Description: "The URL to retrieve the web page contents from",
 		},
 	},
-	Options: map[string]string{},
-	Run:     RetrievePage,
+	Options:   map[string]string{},
+	Run:       RetrievePage,
+	Summarize: true,
 }
 
 func RetrievePage(args map[string]any) (map[string]any, error) {
-	url, ok := args["url"].(string)
+	urlStr, ok := args["url"].(string)
 	if !ok {
 		return map[string]any{
 			"success": false,
@@ -106,7 +107,25 @@ func RetrievePage(args map[string]any) (map[string]any, error) {
 		}, fmt.Errorf("url is not a string")
 	}
 
-	resp, err := http.Get(url)
+	// Parse URL to check domain
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"error":   "invalid URL",
+		}, fmt.Errorf("invalid URL: %v", err)
+	}
+
+	// Check if it's a YouTube domain
+	if parsedURL.Host == "youtube.com" || parsedURL.Host == "www.youtube.com" || 
+	   parsedURL.Host == "youtu.be" || parsedURL.Host == "m.youtube.com" {
+		return map[string]any{
+			"success": false,
+			"error":   "cannot retrieve video content",
+		}, fmt.Errorf("error cannot retrieve video content")
+	}
+
+	resp, err := http.Get(urlStr)
 	if err != nil {
 		return map[string]any{
 			"success": false,

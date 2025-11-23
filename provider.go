@@ -20,20 +20,22 @@ const (
 )
 
 type Provider struct {
-	Provider string `json:"provider"`
-	Name     string `json:"name"`
-	APIKey   string `json:"apiKey"`
-	BaseURL  string `json:"baseURL"`
-	Client   *Client
-	Model    *Model
-	Log      logr.Logger
+	Provider      string `json:"provider"`
+	Name          string `json:"name"`
+	APIKey        string `json:"apiKey"`
+	BaseURL       string `json:"baseURL"`
+	Client        *Client
+	Model         *Model
+	EmbeddingModel string
+	Log           logr.Logger
 }
 
 type ProviderOptions struct {
-	Name    string
-	APIKey  string
-	BaseURL string
-	Log     logr.Logger
+	Name          string
+	APIKey        string
+	BaseURL       string
+	EmbeddingModel string
+	Log           logr.Logger
 }
 
 type Chat struct {
@@ -43,16 +45,18 @@ type Chat struct {
 	GenerationComplete chan bool
 	Done               chan bool
 	Logger             logr.Logger
+	Turns              int
 }
 
 // NewProvider creates a new provider with a default logr.Discard() logger
 func NewProvider(provider string, options ProviderOptions) (*Provider, error) {
 	p := &Provider{
-		Provider: provider,
-		Name:     options.Name,
-		APIKey:   options.APIKey,
-		BaseURL:  options.BaseURL,
-		Log:      logr.Discard(),
+		Provider:       provider,
+		Name:           options.Name,
+		APIKey:         options.APIKey,
+		BaseURL:        options.BaseURL,
+		EmbeddingModel: options.EmbeddingModel,
+		Log:            logr.Discard(),
 	}
 	client, err := NewClient(p)
 	if err != nil {
@@ -65,11 +69,12 @@ func NewProvider(provider string, options ProviderOptions) (*Provider, error) {
 // NewProviderWithLog creates a new provider with a custom logr.Logger
 func NewProviderWithLog(provider string, options ProviderOptions) (*Provider, error) {
 	p := &Provider{
-		Provider: provider,
-		Name:     options.Name,
-		APIKey:   options.APIKey,
-		BaseURL:  options.BaseURL,
-		Log:      options.Log,
+		Provider:       provider,
+		Name:           options.Name,
+		APIKey:         options.APIKey,
+		BaseURL:        options.BaseURL,
+		EmbeddingModel: options.EmbeddingModel,
+		Log:            options.Log,
 	}
 	client, err := NewClient(p)
 	if err != nil {
@@ -111,7 +116,7 @@ func (p *Provider) Generate(modelOptions ModelOptions, prompt string) (string, e
 	case OPENAI:
 		model.openAIClient = p.Client.OpenAI
 	}
-	return model.generate(prompt)
+	return model.generate(prompt, modelOptions)
 }
 
 func (p *Provider) RunTool(toolName string, args map[string]any) (any, error) {
@@ -145,5 +150,43 @@ func (p *Provider) RunTool(toolName string, args map[string]any) (any, error) {
 	if DEBUG {
 		p.Log.Info("Tool result", "result", result)
 	}
+	if tool.Summarize {
+		return p.Generate(ModelOptions{
+			ModelName: "llamacpp/qwen3-30b-a3b",
+			Parameters: map[string]any{
+				NumPredict: 5000,
+			},
+		}, fmt.Sprintf(`Summarize these tool results in 5000 words or less. Your summarization must be shorter than the provided value\n
+				If there appears to be an error, just return the error with no additional information\n
+				Do not provide any reference to the word count or the fact that you summarized. Simply return your content.\n\n%s`, result))
+	}
 	return result, err
+}
+
+// GenerateEmbedding generates an embedding for a single text input using the appropriate provider
+func (p *Provider) GenerateEmbedding(ctx context.Context, text string, model string) ([]float32, error) {
+	switch p.Provider {
+	case GEMINI:
+		return geminiGenerateEmbedding(ctx, p.Client.Gemini, text, model)
+	case OPENAI:
+		return p.Client.OpenAI.GenerateEmbedding(ctx, text, model)
+	case OLLAMA:
+		return ollamaGenerateEmbedding(ctx, p.Client.Ollama, text, model)
+	default:
+		return nil, fmt.Errorf("unsupported provider for embeddings: %s", p.Provider)
+	}
+}
+
+// GenerateEmbeddings generates embeddings for multiple text inputs using the appropriate provider
+func (p *Provider) GenerateEmbeddings(ctx context.Context, texts []string, model string) ([][]float32, error) {
+	switch p.Provider {
+	case GEMINI:
+		return geminiGenerateEmbeddings(ctx, p.Client.Gemini, texts, model)
+	case OPENAI:
+		return p.Client.OpenAI.GenerateEmbeddings(ctx, texts, model)
+	case OLLAMA:
+		return ollamaGenerateEmbeddings(ctx, p.Client.Ollama, texts, model)
+	default:
+		return nil, fmt.Errorf("unsupported provider for embeddings: %s", p.Provider)
+	}
 }

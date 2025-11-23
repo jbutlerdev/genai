@@ -38,6 +38,10 @@ func NewClient(provider *Provider) (*Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OpenAI client: %v", err)
 		}
+		// Set the embedding model if specified
+		if provider.EmbeddingModel != "" {
+			o.model = provider.EmbeddingModel
+		}
 		client.OpenAI = o
 	}
 	return client, nil

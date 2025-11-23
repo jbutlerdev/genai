@@ -15,6 +15,7 @@ type Tool struct {
 	Parameters  []Parameter
 	Options     map[string]string
 	Run         func(map[string]any) (map[string]any, error)
+	Summarize   bool
 }
 
 type RunnableTool struct {
@@ -29,7 +30,7 @@ type Parameter struct {
 	Required    bool
 }
 
-var toolMap = mergeTools(fileTools, githubTools, gitTools, searchTools)
+var toolMap = mergeTools(fileTools, githubTools, gitTools, searchTools, memoryTools)
 
 func mergeTools(tools ...map[string]Tool) map[string]Tool {
 	keys := make(map[string]bool)

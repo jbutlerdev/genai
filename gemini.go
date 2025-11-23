@@ -116,3 +116,56 @@ func min(a, b time.Duration) time.Duration {
 	}
 	return b
 }
+
+// GenerateEmbedding generates an embedding for a single text input using Google's Gemini embedding API
+func geminiGenerateEmbedding(ctx context.Context, client *gemini.Client, text string, model string) ([]float32, error) {
+	// Use gemini-embedding-001 as the default model if none provided
+	if model == "" {
+		model = "gemini-embedding-001"
+	}
+	em := client.EmbeddingModel(model)
+
+	resp, err := em.EmbedContent(ctx, gemini.Text(text))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create embedding: %w", err)
+	}
+
+	// Convert []float64 to []float32
+	embedding := make([]float32, len(resp.Embedding.Values))
+	for i, v := range resp.Embedding.Values {
+		embedding[i] = float32(v)
+	}
+
+	return embedding, nil
+}
+
+// GenerateEmbeddings generates embeddings for multiple text inputs using Google's Gemini embedding API
+func geminiGenerateEmbeddings(ctx context.Context, client *gemini.Client, texts []string, model string) ([][]float32, error) {
+	// Use gemini-embedding-001 as the default model if none provided
+	if model == "" {
+		model = "gemini-embedding-001"
+	}
+	em := client.EmbeddingModel(model)
+
+	// Create a batch
+	batch := em.NewBatch()
+	for _, text := range texts {
+		batch.AddContent(gemini.Text(text))
+	}
+
+	resp, err := em.BatchEmbedContents(ctx, batch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create embeddings: %w", err)
+	}
+
+	embeddings := make([][]float32, len(resp.Embeddings))
+	for i, embedding := range resp.Embeddings {
+		// Convert []float64 to []float32
+		embeddings[i] = make([]float32, len(embedding.Values))
+		for j, v := range embedding.Values {
+			embeddings[i][j] = float32(v)
+		}
+	}
+
+	return embeddings, nil
+}

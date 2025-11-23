@@ -39,6 +39,17 @@ Tools are provided by category. You can choose to pass a single tool or a catego
   - `update_issue`
   - `delete_issue`
 
+- Memory
+  - `memory_store`
+  - `memory_retrieve`
+  - `memory_update`
+  - `memory_delete`
+  - `memory_operation` (single tool with operation parameter)
+
+### Running the Memory Example
+
+See [Memory Example README](examples/memory/README.md) for instructions on how to run the memory tool example with Docker.
+
 ### Planned Categories
 
 - Slack
