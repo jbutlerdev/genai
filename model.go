@@ -27,12 +27,15 @@ const (
 	TopK          = "top_k"
 	TopP          = "top_p"
 	MinP          = "min_p"
+
+	DefaultMaxTurns = 100
 )
 
 type ModelOptions struct {
 	ModelName    string
 	SystemPrompt string
 	Parameters   map[string]any
+	MaxTurns     int
 }
 
 type Model struct {
@@ -47,6 +50,7 @@ type Model struct {
 	Logger        logr.Logger
 	SystemPrompt  string
 	Parameters    map[string]any
+	MaxTurns      int
 }
 
 func NewModel(provider *Provider, modelOptions ModelOptions, log logr.Logger) *Model {
@@ -56,11 +60,15 @@ func NewModel(provider *Provider, modelOptions ModelOptions, log logr.Logger) *M
 	if _, ok := modelOptions.Parameters[NumCtx]; !ok {
 		modelOptions.Parameters[NumCtx] = 32768
 	}
+	if modelOptions.MaxTurns == 0 {
+		modelOptions.MaxTurns = DefaultMaxTurns
+	}
 	m := &Model{
 		Provider:     provider,
 		Logger:       log,
 		SystemPrompt: modelOptions.SystemPrompt,
 		Parameters:   modelOptions.Parameters,
+		MaxTurns:     modelOptions.MaxTurns,
 	}
 	switch provider.Provider {
 	case GEMINI:
@@ -95,7 +103,7 @@ func (m *Model) AddTool(toolsToAdd ...*tools.Tool) error {
 	return nil
 }
 
-func (m *Model) generate(prompt string) (string, error) {
+func (m *Model) generate(prompt string, modelOptions ModelOptions) (string, error) {
 	switch m.Provider.Provider {
 	case GEMINI:
 		input := &retryableGeminiCallInput{
@@ -121,7 +129,7 @@ func (m *Model) generate(prompt string) (string, error) {
 		return resp, nil
 	case OPENAI:
 		m.Logger.Info("Generating content with OpenAI", "content", prompt)
-		resp, err := m.openAIClient.Generate(context.Background(), m.openAIModel, m.SystemPrompt, prompt)
+		resp, err := m.openAIClient.Generate(context.Background(), modelOptions, m.SystemPrompt, prompt)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate content with OpenAI: %v", err)
 		}
@@ -171,7 +179,7 @@ func (m *Model) chat(ctx context.Context, chat *Chat) error {
 		m.openAIClient.Tools = m.Tools
 
 		// Delegate to OpenAI client's Chat method
-		return m.openAIClient.Chat(ctx, m.openAIModel, m.SystemPrompt, chat, m.Provider, messages)
+		return m.openAIClient.Chat(ctx, m, chat, messages)
 	default:
 		return fmt.Errorf("unsupported provider: %s", m.Provider.Provider)
 	}

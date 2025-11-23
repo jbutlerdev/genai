@@ -15,10 +15,10 @@ import (
 // EmbeddingProvider defines the interface for generating embeddings
 type EmbeddingProvider interface {
 	// GenerateEmbedding generates an embedding for a single text input
-	GenerateEmbedding(ctx context.Context, text string) ([]float32, error)
+	GenerateEmbedding(ctx context.Context, text string, model string) ([]float32, error)
 
 	// GenerateEmbeddings generates embeddings for multiple text inputs
-	GenerateEmbeddings(ctx context.Context, texts []string) ([][]float32, error)
+	GenerateEmbeddings(ctx context.Context, texts []string, model string) ([][]float32, error)
 }
 
 // MemoryEntry represents a stored memory with its metadata
@@ -138,7 +138,7 @@ func initSchema(db *sql.DB) error {
 // generateEmbedding generates vector embeddings for text content using the configured embedding provider
 func (mt *MemoryTool) generateEmbedding(ctx context.Context, text string) ([]float32, error) {
 	// Use the actual embedding provider to generate embeddings
-	embedding, err := mt.embeddingProvider.GenerateEmbedding(ctx, text)
+	embedding, err := mt.embeddingProvider.GenerateEmbedding(ctx, text, mt.config.EmbeddingModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -353,6 +353,7 @@ var memoryTools = map[string]Tool{
 			{Name: "content", Type: "string", Description: "The content to store", Required: true},
 			{Name: "metadata", Type: "object", Description: "Optional metadata associated with the memory", Required: false},
 		},
+		Options: map[string]string{},
 		Run: runMemoryStore,
 	},
 	MemoryRetrieveToolName: {
@@ -363,6 +364,7 @@ var memoryTools = map[string]Tool{
 			{Name: "top_k", Type: "integer", Description: "Number of results to return", Required: false},
 			{Name: "filters", Type: "object", Description: "Metadata filters to apply", Required: false},
 		},
+		Options: map[string]string{},
 		Run: runMemoryRetrieve,
 	},
 	MemoryUpdateToolName: {
@@ -373,6 +375,7 @@ var memoryTools = map[string]Tool{
 			{Name: "content", Type: "string", Description: "The new content", Required: true},
 			{Name: "metadata", Type: "object", Description: "Optional new metadata", Required: false},
 		},
+		Options: map[string]string{},
 		Run: runMemoryUpdate,
 	},
 	MemoryDeleteToolName: {
@@ -381,9 +384,19 @@ var memoryTools = map[string]Tool{
 		Parameters: []Parameter{
 			{Name: "id", Type: "string", Description: "The ID of the memory to delete", Required: true},
 		},
+		Options: map[string]string{},
 		Run: runMemoryDelete,
 	},
-	"memory_operation": memoryOperationTool,
+	"memory_operation": {
+		Name:        "memory_operation",
+		Description: "Perform memory operations (store, retrieve, update, delete)",
+		Parameters: []Parameter{
+			{Name: "operation", Type: "string", Description: "The operation to perform (store, retrieve, update, delete)", Required: true},
+			{Name: "arguments", Type: "object", Description: "Operation-specific arguments", Required: true},
+		},
+		Options: map[string]string{},
+		Run: runMemoryOperation,
+	},
 }
 
 // MemoryStoreArgs represents arguments for storing a memory
