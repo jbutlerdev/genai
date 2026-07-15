@@ -1,0 +1,8 @@
+# Go build artifacts
+*.test
+*.out
+/genai-test
+/test/genai-test
+# editor/OS
+.DS_Store
+*.swp
