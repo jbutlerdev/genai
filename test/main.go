@@ -27,7 +27,7 @@ func main() {
 
 	// Test generating an embedding
 	ctx := context.Background()
-	embedding, err := provider.GenerateEmbedding(ctx, "test text")
+	embedding, err := provider.GenerateEmbedding(ctx, "test text", "lmstudio/text-embedding-qwen3-embedding-8b")
 	if err != nil {
 		log.Printf("Failed to generate embedding: %v", err)
 	} else {

@@ -165,7 +165,7 @@ func handleOllamaResponse(model *Model, tools []ollama.Tool, chat *Chat, message
 			}
 			toolCalls[hash] = true
 			model.Logger.Info("Handling function call", "name", toolCall.Function.Name, "content", string(funcJson))
-			result, err := model.Provider.RunTool(toolCall.Function.Name, toolCall.Function.Arguments)
+			result, err := model.Provider.RunTool(toolCall.Function.Name, toolCall.Function.Arguments.ToMap())
 			if err != nil {
 				model.Logger.Error(err, "Failed to run tool", "tool", toolCall.Function.Name)
 			}
