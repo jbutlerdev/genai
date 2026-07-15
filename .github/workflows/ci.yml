@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build, vet & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Patched toolchain (clears Go stdlib security advisories fixed in
+          # go1.26.x point releases). ollama v0.32.0 requires go 1.26.0.
+          go-version: '1.26.5'
+      # examples/ contain stale demo code that does not compile against the
+      # current library API (pre-existing on main); build the core + tools only.
+      - name: Build & vet (root module, excluding examples)
+        run: |
+          pkgs=$(go list ./... | grep -v '/examples/')
+          go build $pkgs
+          go vet $pkgs
+      - name: Test (root module, excluding examples)
+        run: go test $(go list ./... | grep -v '/examples/')
+      - name: Build & vet (test module)
+        working-directory: ./test
+        run: |
+          go build ./...
+          go vet ./...
